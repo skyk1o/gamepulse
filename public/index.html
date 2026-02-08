@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <title>GamePulse</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 950px;
+      margin: 30px auto;
+      padding: 0 15px;
+      background: #ffffff;
+      color: #000000;
+    }
+    h2, h3 { margin-top: 0; }
+    p { margin: 8px 0 14px 0; }
+    .box {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 9px;
+      margin: 6px 0;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+    textarea { height: 90px; }
+    button { cursor: pointer; }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .status {
+      font-size: 13px;
+      color: #333;
+      margin-top: 6px;
+      white-space: pre-wrap;
+    }
+    .error { color: #b00020; }
+
+    /* NEWS */
+    .news-list { display: grid; gap: 12px; margin-top: 10px; }
+    .news-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 12px;
+    }
+    .news-card img {
+      width: 160px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 6px;
+      background: #eee;
+    }
+    .news-title { font-size: 15px; font-weight: bold; margin-bottom: 6px; }
+    .news-meta { font-size: 12px; color: #555; margin-bottom: 6px; }
+    .news-desc { font-size: 14px; margin-bottom: 8px; }
+    .news-card a { font-size: 13px; text-decoration: none; color: #0066cc; }
+
+    /* REVIEWS */
+    .reviews-list { display: grid; gap: 12px; margin-top: 10px; }
+    .review-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .review-title { font-weight: bold; margin-bottom: 6px; }
+    .review-meta { font-size: 12px; color: #555; margin-bottom: 8px; }
+    .review-text { font-size: 14px; white-space: pre-wrap; }
+
+    @media (max-width: 800px) {
+      .row { grid-template-columns: 1fr; }
+      .news-card { grid-template-columns: 1fr; }
+      .news-card img { width: 100%; height: 180px; }
+    }
+  </style>
+</head>
+<body>
+
+<h2>GamePulse</h2>
+<p>Simple gaming news and reviews platform</p>
+
+<div class="row">
+  <div class="box">
+    <h3>Authentication</h3>
+    <input id="email" placeholder="Email" />
+    <input id="password" type="password" placeholder="Password" />
+    <button id="registerBtn">Register</button>
+    <button id="loginBtn">Login</button>
+    <button id="logoutBtn">Logout</button>
+    <div id="authMsg" class="status"></div>
+  </div>
+
+  <div class="box">
+    <h3>Create Review</h3>
+    <input id="title" placeholder="Game title" />
+    <input id="rating" type="number" min="1" max="10" placeholder="Rating (1–10)" />
+    <textarea id="content" placeholder="Review text"></textarea>
+    <button id="createReviewBtn">Create</button>
+    <button id="myReviewsBtn">My reviews</button>
+    <div id="reviewsMsg" class="status"></div>
+  </div>
+</div>
+
+<div class="box">
+  <h3>News</h3>
+  <input id="q" value="gaming" placeholder="Search query" />
+  <button id="newsBtn">Load news</button>
+  <div id="newsOut" class="news-list"></div>
+  <div id="newsMsg" class="status"></div>
+</div>
+
+<div class="box">
+  <h3>My Reviews (List)</h3>
+  <div id="reviewsOut" class="reviews-list"></div>
+</div>
+
+<script>
+  const tokenKey = "gp_token";
+  const getToken = () => localStorage.getItem(tokenKey) || "";
+  const setToken = (t) => t ? localStorage.setItem(tokenKey, t) : localStorage.removeItem(tokenKey);
+
+  async function api(url, { method = "GET", body } = {}) {
+    const headers = { "Content-Type": "application/json" };
+    const token = getToken();
+    if (token) headers.Authorization = "Bearer " + token;
+
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined
+    });
+
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = {}; }
+
+    if (!res.ok) throw new Error(data.message || "Request error");
+    return data;
+  }
+
+  function esc(s) {
+    return String(s || "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString();
+  }
+
+  function setStatus(el, msg, isError) {
+    el.textContent = msg || "";
+    el.className = isError ? "status error" : "status";
+  }
+
+  registerBtn.onclick = async () => {
+    setStatus(authMsg, "");
+    try {
+      const data = await api("/api/auth/register", {
+        method: "POST",
+        body: { username: "user", email: email.value.trim(), password: password.value }
+      });
+      setToken(data.token);
+      setStatus(authMsg, "Registered successfully");
+    } catch (e) {
+      setStatus(authMsg, e.message, true);
+    }
+  };
+
+  loginBtn.onclick = async () => {
+    setStatus(authMsg, "");
+    try {
+      const data = await api("/api/auth/login", {
+        method: "POST",
+        body: { email: email.value.trim(), password: password.value }
+      });
+      setToken(data.token);
+      setStatus(authMsg, "Logged in");
+    } catch (e) {
+      setStatus(authMsg, e.message, true);
+    }
+  };
+
+  logoutBtn.onclick = () => {
+    setToken("");
+    setStatus(authMsg, "Logged out");
+  };
+
+  newsBtn.onclick = async () => {
+    newsOut.innerHTML = "";
+    setStatus(newsMsg, "Loading...");
+    try {
+      const data = await api(`/api/news?query=${encodeURIComponent(q.value)}&page=1&pageSize=10`);
+      const articles = data.articles || [];
+
+      if (articles.length === 0) {
+        setStatus(newsMsg, "No results");
+        return;
+      }
+
+      setStatus(newsMsg, "");
+      newsOut.innerHTML = articles.map(a => `
+        <div class="news-card">
+          ${a.imageUrl ? `<img src="${a.imageUrl}" alt="image">` : `<div></div>`}
+          <div>
+            <div class="news-title">${esc(a.title || "")}</div>
+            <div class="news-meta">${esc(a.source || "")}${a.publishedAt ? " | " + esc(fmtDate(a.publishedAt)) : ""}</div>
+            <div class="news-desc">${esc(a.description || "")}</div>
+            ${a.url ? `<a href="${a.url}" target="_blank" rel="noreferrer">Read more</a>` : ""}
+          </div>
+        </div>
+      `).join("");
+    } catch (e) {
+      setStatus(newsMsg, e.message, true);
+    }
+  };
+
+  createReviewBtn.onclick = async () => {
+    setStatus(reviewsMsg, "Saving...");
+    try {
+      await api("/api/reviews", {
+        method: "POST",
+        body: {
+          gameTitle: title.value.trim(),
+          rating: Number(rating.value),
+          content: content.value
+        }
+      });
+      setStatus(reviewsMsg, "Review created");
+      title.value = "";
+      rating.value = "";
+      content.value = "";
+      await loadReviews();
+    } catch (e) {
+      setStatus(reviewsMsg, e.message, true);
+    }
+  };
+
+  async function loadReviews() {
+    reviewsOut.innerHTML = "";
+    try {
+      const data = await api("/api/reviews");
+
+      if (!Array.isArray(data) || data.length === 0) {
+        reviewsOut.innerHTML = `<div class="status">No reviews yet</div>`;
+        return;
+      }
+
+      reviewsOut.innerHTML = data.map(r => `
+        <div class="review-card">
+          <div class="review-title">${esc(r.gameTitle || "")} (Rating: ${esc(r.rating)}/10)</div>
+          <div class="review-meta">
+            ${r.status ? "Status: " + esc(r.status) : ""}
+            ${r.createdAt ? " | " + esc(fmtDate(r.createdAt)) : ""}
+          </div>
+          <div class="review-text">${esc(r.content || "")}</div>
+        </div>
+      `).join("");
+    } catch (e) {
+      reviewsOut.innerHTML = `<div class="status error">${esc(e.message)}</div>`;
+    }
+  }
+
+  myReviewsBtn.onclick = async () => {
+    setStatus(reviewsMsg, "");
+    await loadReviews();
+  };
+
+  // optional: load reviews on page open (will show error if not logged in)
+  // loadReviews();
+</script>
+
+</body>
+</html>

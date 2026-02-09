@@ -1,4 +1,4 @@
-# GamePulse API (Gaming News & Reviews)
+# GamePulse API (Gaming News and Reviews)
 
 Node.js + Express + MongoDB backend.
 
@@ -11,3 +11,4 @@ Node.js + Express + MongoDB backend.
 ## Setup
 ```bash
 npm install
+
